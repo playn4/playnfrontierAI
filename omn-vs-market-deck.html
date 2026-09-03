@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>playnfrontierAI — The Memory the Benchmarks Don't Measure</title>
+<style>
+  :root{
+    --bg:#0a0e12; --panel:#10161d; --line:#1e2833; --ink:#e8edf2; --dim:#8b98a5;
+    --faint:#5b6875; --accent:#3ddc84; --accent2:#f5b83d; --red:#e5484d; --cyan:#22d3ee;
+    --mono:ui-monospace,'JetBrains Mono','Cascadia Code',Menlo,monospace;
+    --sans:ui-sans-serif,system-ui,'Inter','Segoe UI',Roboto,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-snap-type:y mandatory;scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow-x:hidden}
+  #bg{position:fixed;inset:0;z-index:0;opacity:.85;pointer-events:none}
+  #prog{position:fixed;top:0;left:0;height:3px;width:0;z-index:50;
+        background:linear-gradient(90deg,var(--accent),var(--accent2));
+        box-shadow:0 0 12px rgba(61,220,132,.6)}
+  .slide{
+    min-height:100vh;scroll-snap-align:start;display:flex;flex-direction:column;
+    justify-content:center;padding:7vh 8vw;position:relative;z-index:1;overflow:hidden;
+  }
+  .slide::before{
+    content:"";position:absolute;inset:0;z-index:-1;
+    background:radial-gradient(1100px 560px at 78% -12%,rgba(61,220,132,.08),transparent 62%),
+               radial-gradient(900px 500px at 8% 108%,rgba(245,184,61,.05),transparent 60%);
+    pointer-events:none;
+  }
+  .kicker{font-family:var(--mono);font-size:.85rem;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);margin-bottom:1.6rem}
+  .kicker.alt{color:var(--accent2)}
+  h1{font-size:clamp(2.7rem,6.4vw,5.4rem);line-height:1.04;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:clamp(1.9rem,3.9vw,3.2rem);line-height:1.1;font-weight:750;letter-spacing:-.015em;margin-bottom:2.2rem}
+  .sub{color:var(--dim);font-size:clamp(1.05rem,1.6vw,1.35rem);margin-top:1.4rem;max-width:58ch;line-height:1.55}
+  .foot{
+    position:absolute;bottom:3.2vh;left:8vw;right:8vw;display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:.72rem;color:var(--faint);letter-spacing:.12em;text-transform:uppercase;
+  }
+  .brand{white-space:nowrap;font-weight:800}
+  .brand .fx{color:var(--accent);text-shadow:0 0 16px rgba(61,220,132,.4)}
+  .shimmer{
+    background:linear-gradient(92deg,var(--ink) 5%,var(--accent) 38%,var(--accent2) 54%,var(--ink) 78%);
+    background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:shimmer 7s linear infinite;
+  }
+  @keyframes shimmer{to{background-position:-220% 0}}
+  .grid{display:grid;gap:1.2rem}
+  .cols2{grid-template-columns:1fr 1fr}
+  .cols3{grid-template-columns:repeat(3,1fr)}
+  .card{
+    background:linear-gradient(160deg,rgba(255,255,255,.035),rgba(255,255,255,0) 42%),var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:1.5rem 1.6rem;position:relative;overflow:hidden;
+  }
+  .card::before{content:"";position:absolute;top:0;left:8%;right:8%;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(61,220,132,.5),transparent)}
+  .card h3{font-size:1.12rem;margin-bottom:.55rem;font-weight:700}
+  .card p{color:var(--dim);font-size:.94rem;line-height:1.5}
+  .card p b{color:var(--ink)}
+  .glass{
+    position:relative;border-radius:16px;padding:26px 28px;
+    background:
+      linear-gradient(165deg,
+        color-mix(in srgb,var(--ink) 6%,transparent),
+        color-mix(in srgb,var(--ink) 2%,transparent) 45%,
+        transparent 78%),
+      color-mix(in srgb,var(--panel) 62%,transparent);
+    -webkit-backdrop-filter:blur(16px) saturate(140%);
+    backdrop-filter:blur(16px) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb,var(--ink) 9%,transparent),
+      0 14px 34px -14px rgba(0,0,0,.5);
+    transition:transform .45s cubic-bezier(.22,1,.36,1);
+  }
+  .glass::before{
+    content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+    background:linear-gradient(135deg,
+      color-mix(in srgb,var(--accent) 55%,transparent),
+      color-mix(in srgb,var(--line) 90%,transparent) 38%,
+      color-mix(in srgb,var(--accent2) 30%,transparent));
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    mask-composite:exclude;pointer-events:none;
+  }
+  .glass::after{
+    content:"";position:absolute;inset:-1px;border-radius:inherit;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent),
+      0 8px 42px -6px color-mix(in srgb,var(--accent) 32%,transparent);
+    opacity:0;transition:opacity .45s cubic-bezier(.22,1,.36,1);pointer-events:none;
+  }
+  .glass:hover{transform:translateY(-3px)}
+  .glass:hover::after{opacity:1}
+  .bar-row{display:grid;grid-template-columns:15rem 1fr 6.2rem;gap:1rem;align-items:center;margin:.55rem 0}
+  .bar-row .lbl{font-family:var(--mono);font-size:.88rem;color:var(--ink);white-space:nowrap}
+  .bar-row .lbl small{color:var(--faint);display:block;font-size:.68rem;letter-spacing:.04em}
+  .track{background:#0d1319;border:1px solid var(--line);border-radius:6px;height:1.35rem;position:relative;overflow:hidden}
+  .fill{position:absolute;inset:0 auto 0 0;border-radius:5px;
+    background:linear-gradient(90deg,#1a5c3d,var(--accent));
+    box-shadow:0 0 18px rgba(61,220,132,.35);min-width:2px;
+    transform:scaleX(0);transform-origin:left;transition:transform 1.2s cubic-bezier(.16,1,.3,1)}
+  .fill.market{background:linear-gradient(90deg,#3a4652,#8b98a5);box-shadow:none}
+  .fill.oracle{background:repeating-linear-gradient(45deg,#3a4652,#3a4652 6px,#4a5866 6px,#4a5866 12px);box-shadow:none}
+  .fill.is-on{transform:scaleX(1)}
+  .bar-row .val{font-family:var(--mono);font-size:.95rem;text-align:right;color:var(--ink)}
+  .callout{
+    border-left:3px solid var(--accent2);background:rgba(245,184,61,.07);
+    padding:1.1rem 1.4rem;border-radius:0 10px 10px 0;margin-top:1.8rem;max-width:76ch;
+  }
+  .callout.g{border-left-color:var(--accent);background:rgba(61,220,132,.06)}
+  .callout.r{border-left-color:var(--red);background:rgba(229,72,77,.06)}
+  .callout b{color:var(--accent2)}
+  .callout.g b{color:var(--accent)}
+  .callout.r b{color:var(--red)}
+  .callout p{color:var(--ink);font-size:1rem;line-height:1.55}
+  table{width:100%;border-collapse:collapse;font-size:.92rem}
+  th{font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+     text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--line)}
+  td{padding:.72rem .8rem;border-bottom:1px solid #141c24;color:var(--dim);vertical-align:top;line-height:1.45}
+  td.name{color:var(--ink);font-weight:600;white-space:nowrap}
+  tr.hero td{background:rgba(61,220,132,.05);border-bottom:1px solid rgba(61,220,132,.35)}
+  tr.hero td.name{color:var(--accent)}
+  .yes{color:var(--accent);font-family:var(--mono);font-weight:700}
+  .no{color:var(--faint);font-family:var(--mono)}
+  .trio .card{border-top:3px solid var(--accent);padding:2rem 1.8rem}
+  .trio .card .idx{font-family:var(--mono);color:var(--accent);font-size:.8rem;letter-spacing:.3em;margin-bottom:1rem}
+  .trio .card h3{font-size:1.5rem}
+  .trio .card p{font-size:1rem;margin-top:.55rem}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1.2rem;margin-top:2rem}
+  .stat{background:linear-gradient(160deg,rgba(255,255,255,.035),rgba(255,255,255,0) 42%),var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:1.6rem;text-align:left}
+  .stat .v{font-family:var(--mono);font-size:clamp(2.2rem,4.2vw,3.4rem);font-weight:800;color:var(--accent);
+    line-height:1;text-shadow:0 0 24px rgba(61,220,132,.35)}
+  .stat .v.w{color:var(--ink);text-shadow:none}
+  .stat .k{color:var(--dim);font-size:.85rem;margin-top:.7rem;line-height:1.45}
+  .count{font-variant-numeric:tabular-nums}
+  .chips{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:2rem;max-width:60rem}
+  .chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:.6rem 1.15rem;
+    font-family:var(--mono);font-size:.9rem;color:var(--ink)}
+  .chip.g{border-color:rgba(61,220,132,.55);color:var(--accent);box-shadow:0 0 16px rgba(61,220,132,.15)}
+  .verdict{font-size:clamp(1.8rem,3.6vw,3.1rem);font-weight:750;line-height:1.22;max-width:34ch;letter-spacing:-.01em}
+  .verdict em{font-style:normal;color:var(--accent);text-shadow:0 0 22px rgba(61,220,132,.3)}
+  .cta{display:inline-block;margin-top:1.6rem;font-family:var(--mono);font-size:1.05rem;color:var(--accent2);
+    border:1px solid rgba(245,184,61,.45);border-radius:999px;padding:.85rem 1.7rem;
+    text-decoration:none;box-shadow:0 0 24px rgba(245,184,61,.15)}
+  .glitchline{position:relative;height:3.8rem;margin:2.4rem 0 2.4rem;max-width:64rem}
+  .glitchline .g{
+    position:absolute;inset:0;display:flex;align-items:center;font-family:var(--mono);font-weight:800;
+    font-size:clamp(1.5rem,3.4vw,2.7rem);color:var(--ink);white-space:nowrap;opacity:0;
+    animation:gcycle 10.5s steps(1,end) infinite;overflow:hidden;
+  }
+  .glitchline .g:nth-child(2){animation-delay:1.5s}
+  .glitchline .g:nth-child(3){animation-delay:3s}
+  .glitchline .g:nth-child(4){animation-delay:4.5s}
+  .glitchline .g:nth-child(5){animation-delay:6s}
+  .glitchline .g:nth-child(6){animation-delay:7.5s}
+  .glitchline .g:nth-child(7){animation-delay:9s}
+  @keyframes gcycle{
+    0%{opacity:1;transform:none;text-shadow:none}
+    1%{transform:translate(-5px,2px);text-shadow:3px 0 var(--red),-3px 0 var(--cyan)}
+    2%{transform:translate(5px,-2px) skewX(-4deg);text-shadow:-3px 0 var(--red),3px 0 var(--cyan)}
+    3%{transform:none;text-shadow:none}
+    11%{opacity:1}
+    11.5%,100%{opacity:0}
+  }
+  .closer-brand{font-size:clamp(3.2rem,10vw,8rem);font-weight:800;letter-spacing:-.03em;line-height:1;
+    margin-top:1rem}
+  .closer-brand .fx{color:var(--accent);text-shadow:0 0 42px rgba(61,220,132,.5),0 0 12px rgba(61,220,132,.35)}
+  .verified{font-family:var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--accent2);
+    margin-top:2.4rem;font-size:1rem}
+  .reveal{opacity:0;transform:translateY(26px);filter:blur(6px);
+    transition:opacity .7s cubic-bezier(.22,1,.36,1),transform .7s cubic-bezier(.22,1,.36,1),filter .7s cubic-bezier(.22,1,.36,1)}
+  .reveal.is-visible{opacity:1;transform:translateY(0);filter:blur(0)}
+  .reveal.glass{transition:opacity .7s cubic-bezier(.22,1,.36,1),transform .7s cubic-bezier(.22,1,.36,1),filter .7s cubic-bezier(.22,1,.36,1)}
+  .glass.reveal.is-visible:hover{transform:translateY(-3px)}
+  .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:2rem;align-items:stretch;margin-top:1rem}
+  .league{border-radius:16px;padding:2rem}
+  .league.b{box-shadow:0 0 70px rgba(61,220,132,.08)}
+  .league h3{font-size:1.3rem;margin-bottom:.3rem}
+  .league .tag{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--faint)}
+  .league.b .tag{color:var(--accent)}
+  .league ul{list-style:none;margin-top:1.2rem}
+  .league li{color:var(--dim);font-size:.95rem;padding:.45rem 0 .45rem 1.3rem;position:relative;line-height:1.4}
+  .league li::before{content:"—";position:absolute;left:0;color:var(--faint)}
+  .league.b li{color:var(--ink)}
+  .league.b li::before{content:"+";color:var(--accent);font-weight:700}
+  .vs .mid{display:flex;align-items:center;font-family:var(--mono);color:var(--faint);font-size:1.1rem}
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .reveal{opacity:1;transform:none;filter:none}
+    .fill{transform:scaleX(1)}
+    .shimmer{color:var(--accent);background:none;-webkit-text-fill-color:initial}
+  }
+  @media (max-width:900px){.cols2,.cols3,.stat-grid{grid-template-columns:1fr}.bar-row{grid-template-columns:7rem 1fr 4rem}}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<!-- 1 · TITLE -->
+<section class="slide">
+  <div class="kicker">playnfrontierAI · Frontier Media · Ep 7 · The Universe Audit</div>
+  <h1>The memory the<br><span class="shimmer">benchmarks don't measure.</span></h1>
+  <p class="sub">Every agent-memory vendor grades itself on recall accuracy over chat transcripts.
+     <span class="brand">playn<span class="fx">frontierAI</span></span> plays the other game: an agent-operated
+     knowledge canon on fully local silicon — measured on readiness, truth-integrity, and what it costs to be ready for work.</p>
+  <p class="sub" style="color:var(--faint);font-size:.95rem">All market figures externally sourced (slide footers). All system figures are operational receipts from a live 2×DGX Spark house.</p>
+  <div class="foot"><span class="brand">playn<span class="fx">frontierAI</span></span><span>01 / 11</span></div>
+</section>
+
+<!-- 2 · TWO GAMES -->
+<section class="slide">
+  <div class="kicker">The landscape</div>
+  <h2>Two leagues, two different games.</h2>
+  <div class="vs">
+    <div class="glass league a reveal">
+      <div class="tag">League A — recall accuracy</div>
+      <h3>The cloud memory league</h3>
+      <ul>
+        <li>Vector/graph stores behind an API</li>
+        <li>Graded on LongMemEval &amp; LOCOMO chat-recall</li>
+        <li>Top-k fragments injected per query</li>
+        <li>Mem0 · Zep · Letta · OMEGA · Mastra · MemPalace</li>
+      </ul>
+    </div>
+    <div class="mid">VS</div>
+    <div class="glass league b reveal" data-delay="150">
+      <div class="tag">League B — operations canon</div>
+      <h3>Agent-operated knowledge systems</h3>
+      <ul>
+        <li>Human-readable files, git-versioned, on disk</li>
+        <li>Graded on readiness, truth, concurrency, cost</li>
+        <li>The full operating state, one screen</li>
+        <li>CLAUDE.md incumbents · Karpathy wikis · basic-memory · memnode · <span class="brand" style="color:var(--ink)">playn<span class="fx">frontierAI</span></span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span class="brand">playn<span class="fx">frontierAI</span></span><span>02 / 11</span></div>
+</section>
+
+<!-- 3 · LEAGUE A SCOREBOARD -->
+<section class="slide">
+  <div class="kicker alt">League A — their game, their numbers</div>
+  <h2>The published scoreboard.</h2>
+  <div class="bar-row"><div class="lbl">OMEGA<small>GPT-4.1 · e2e QA</small></div><div class="track"><div class="fill market" style="width:95.4%"></div></div><div class="val">95.4%</div></div>
+  <div class="bar-row"><div class="lbl">Mastra<small>gpt-5-mini · e2e QA</small></div><div class="track"><div class="fill market" style="width:94.87%"></div></div><div class="val">94.9%</div></div>
+  <div class="bar-row"><div class="lbl">Mem0 2026<small>e2e QA</small></div><div class="track"><div class="fill market" style="width:93.4%"></div></div><div class="val">93.4%</div></div>
+  <div class="bar-row"><div class="lbl">Oracle GPT-4o<small>the ceiling</small></div><div class="track"><div class="fill oracle" style="width:92%"></div></div><div class="val">92.0%</div></div>
+  <div class="bar-row"><div class="lbl">Zep / Graphiti<small>gpt-4o · e2e QA</small></div><div class="track"><div class="fill market" style="width:80%"></div></div><div class="val">~80%</div></div>
+  <div class="bar-row"><div class="lbl">Full-context<small>no memory layer · LOCOMO</small></div><div class="track"><div class="fill oracle" style="width:72.9%"></div></div><div class="val">72.9%</div></div>
+  <div class="bar-row"><div class="lbl">Mem0<small>LOCOMO e2e QA</small></div><div class="track"><div class="fill market" style="width:66.9%"></div></div><div class="val">66.9%</div></div>
+  <div class="bar-row"><div class="lbl">OpenAI Memory<small>LOCOMO e2e QA</small></div><div class="track"><div class="fill market" style="width:52.9%"></div></div><div class="val">52.9%</div></div>
+  <div class="callout"><p><b>The cross-harness trap:</b> Mem0 scores 66.9% on its own paper — and <b>27.3%</b> on a shared independent harness. Dense RAG lands within 2–4 points of graph methods. Every vendor wins its own benchmark.</p></div>
+  <div class="foot"><span>Sources: memnode.dev · Preuve AI 2026 · Graphify shared harness</span><span>03 / 11</span></div>
+</section>
+
+<!-- 4 · COST OF KNOWING -->
+<section class="slide">
+  <div class="kicker alt">The number that actually matters</div>
+  <h2>Cost of knowing, per query.</h2>
+  <div class="bar-row"><div class="lbl">Full-context<small>~26K tok · 9.87 s median · LOCOMO</small></div><div class="track" style="height:2.2rem"><div class="fill market" style="width:100%"></div></div><div class="val">26,000</div></div>
+  <div class="bar-row"><div class="lbl">Mem0 selective<small>~1.8K tok · 0.71 s · top-k fragments</small></div><div class="track" style="height:2.2rem"><div class="fill market" style="width:6.9%"></div></div><div class="val">1,800</div></div>
+  <div class="bar-row"><div class="lbl"><span class="brand">playn<span class="fx">frontierAI</span></span><small>~9K tok · the FULL operating state</small></div><div class="track" style="height:2.2rem"><div class="fill" style="width:34.6%"></div></div><div class="val">~9,000</div></div>
+  <div class="stat-grid">
+    <div class="stat"><div class="v">$0.00</div><div class="k">per read — local NVMe, sub-second, no API, no meter running</div></div>
+    <div class="stat"><div class="v w">26K</div><div class="k">tokens: what full-context burns per query (9.87 s median)</div></div>
+    <div class="stat"><div class="v w">−91%</div><div class="k">p95 latency, Mem0 vs full-context — the whole league exists for this gap</div></div>
+    <div class="stat"><div class="v">ANY</div><div class="k">context length · any session count — the canon lives outside the window, so nothing ever degrades</div></div>
+  </div>
+  <div class="callout g"><p><b>The difference:</b> League A buys fragments and decays as context grows (−30% mid-window). The canon sits <b>outside</b> the window — any context length, any session, any model. Throw anything at it.</p></div>
+  <div class="foot"><span>Sources: Mem0 ECAI paper arXiv:2504.19413 · arXiv:2603.04814</span><span>04 / 11</span></div>
+</section>
+
+<!-- 5 · WEIGHT CLASS -->
+<section class="slide">
+  <div class="kicker">League B — our actual weight class</div>
+  <h2>The field we actually stand in.</h2>
+  <div class="callout g" style="margin:0 0 1.6rem;max-width:none"><p><span class="brand">playn<span class="fx">frontierAI</span></span> doesn't just store — it <b>knows its own machine</b> (the hardware it runs on, verified live at every close) and <b>remembers its whole journey</b>: every test, model, error, fix, idea and project. It is the only fighter in this class that can prove what it believes.</p></div>
+  <table>
+    <tr><th>Fighter</th><th>What it is</th><th style="width:6.5rem">Card</th><th style="width:7.5rem">Reality gates</th><th style="width:8rem">Canon doctrine</th></tr>
+    <tr><td class="name">CLAUDE.md / AGENTS.md</td><td>The incumbent — static instructions every coding agent reads</td><td class="no">no</td><td class="no">no</td><td class="no">no</td></tr>
+    <tr><td class="name">Karpathy LLM-wiki pattern</td><td>16M-view pattern; agent-maintained human wiki + plugins</td><td class="no">no</td><td class="no">no</td><td class="no">no</td></tr>
+    <tr><td class="name">basic-memory</td><td>Local markdown + semantic graph via MCP</td><td class="no">no</td><td class="no">no</td><td class="no">no</td></tr>
+    <tr><td class="name">memnode</td><td>Local MCP memory, lineage-first (closest trust-model cousin)</td><td class="no">no</td><td class="no">partial</td><td class="no">no</td></tr>
+    <tr><td class="name">MCP memory servers</td><td>Official KG-JSON · SQLite+embeddings</td><td class="no">no</td><td class="no">no</td><td class="no">no</td></tr>
+    <tr><td class="name">claude-mem <span style="color:var(--faint)">(46K★ in weeks)</span></td><td>IDE hook plugin — episodic auto-capture</td><td class="no">no</td><td class="no">no</td><td class="no">no</td></tr>
+    <tr class="hero"><td class="name">playnfrontierAI</td><td style="color:var(--ink)">Agent-operated canon that knows its hardware and carries its history — facts, decisions, sessions, watch, learnings</td><td class="yes">YES</td><td class="yes">YES</td><td class="yes">YES</td></tr>
+  </table>
+  <div class="foot"><span>Surveyed 2026-09-02 · card = generated one-screen window · gates = memory verified against live system · doctrine = canon wins over episodic</span><span>05 / 11</span></div>
+</section>
+
+<!-- 6 · OUR OWN FIELD -->
+<section class="slide">
+  <div class="kicker">Our own field</div>
+  <h2>Built on a frontier it actually runs.</h2>
+  <p class="sub" style="margin-top:-1rem;margin-bottom:1.8rem">Setting up new AI systems, TP2 clusters, engine swaps, deep research, company ops, content — the full local-AI-frontier stack, at home. The system remembers all of it.</p>
+  <div class="grid cols3">
+    <div class="card reveal"><h3>Cluster bring-ups</h3><p>From loose cables to <b>1M context on two DGX Sparks — in half a day</b>. Every gate, every trap remembered; the next bring-up is a checklist, not an adventure.</p></div>
+    <div class="card reveal" data-delay="80"><h3>Engine swaps</h3><p>Brains swapped <b>twice in one day</b> — fallback in, fallback out, zero data loss. Rollback ladders, memory-exclusive pools and health gates live in canon, not in someone's head.</p></div>
+    <div class="card reveal" data-delay="160"><h3>Research with receipts</h3><p>A frontier feed that scans, digests and banks. Bar held: <b>2 of 32 claims banked</b> in the last run — every single one source-verified.</p></div>
+    <div class="card reveal" data-delay="240"><h3>Errors become doctrine</h3><p><b>28 NVRM errors</b> on a live box became a law: never load a model on a serving machine. Failures here don't repeat — they graduate into rules the whole house inherits.</p></div>
+    <div class="card reveal" data-delay="320"><h3>Company operations</h3><p>An AI-employee office as a side pocket, a COO outside the walls, two-tier labor. The org chart lives in canon — <b>restructured in one afternoon</b> when reality changed.</p></div>
+    <div class="card reveal" data-delay="400"><h3>Studio &amp; content</h3><p>The receipts channel feeds itself: <b>this deck was researched, written and browser-verified</b> by the system it presents.</p></div>
+  </div>
+  <div class="foot"><span class="brand">playn<span class="fx">frontierAI</span></span><span>06 / 11</span></div>
+</section>
+
+<!-- 7 · THE TRIO -->
+<section class="slide">
+  <div class="kicker">The design lead</div>
+  <h2>Three ideas nobody in the class ships together.</h2>
+  <div class="grid cols3 trio">
+    <div class="card reveal"><div class="idx">I</div><h3>One screen. The whole house.</h3>
+      <p>Generated, never hand-written. Staleness flags itself, prose never duplicates — and full catch-up costs <b>~1% of your context</b> while the system underneath keeps growing.</p></div>
+    <div class="card reveal" data-delay="120"><div class="idx">II</div><h3>Memory that audits its machine.</h3>
+      <p>At every close, every claim is re-verified against the live system: files exist, models resolve, health agrees. <b>If reality moved, memory says so</b> — before you trust it.</p></div>
+    <div class="card reveal" data-delay="240"><div class="idx">III</div><h3>Drift is impossible by design.</h3>
+      <p>Project truth outranks episodic memory. Every session a receipt, every decision numbered, every supersession explicit. <b>The market calls this unsolved. We call it Tuesday.</b></p></div>
+  </div>
+  <div class="callout r"><p><b>The unbenchmarkable axis:</b> no published memory benchmark tests whether stored facts are still <i>true</i>, whether entries carry lineage, or whether the agent can prove readiness. OWASP flags memory poisoning as a top agentic risk; benchmark coverage is zero. This is the axis we're built for — and together, these three ideas run a frontier lab and remember all of it.</p></div>
+  <div class="foot"><span class="brand">playn<span class="fx">frontierAI</span></span><span>07 / 11</span></div>
+</section>
+
+<!-- 8 · RECEIPTS -->
+<section class="slide">
+  <div class="kicker">Measured on the house — not a lab</div>
+  <h2>The receipts.</h2>
+  <div class="stat-grid">
+    <div class="stat"><div class="v"><span class="count" data-to="1" data-suffix="%">1%</span></div><div class="k">context for full catch-up at a 900k window — measured live, fastest on record</div></div>
+    <div class="stat"><div class="v w">40–60s</div><div class="k">cold start to ready-for-work, fresh card — agent boot included</div></div>
+    <div class="stat"><div class="v"><span class="count" data-to="12">12</span><span style="font-size:1.6rem"> days</span></div><div class="k">deep recall — across three engine generations, from a vague question</div></div>
+    <div class="stat"><div class="v">ZERO</div><div class="k">wiring for subagents — a blank agent read the card and returned exact canon facts</div></div>
+  </div>
+  <div class="callout g" style="max-width:none;margin-top:1.6rem"><p><b>The 12-day proof.</b> Asked — vaguely, on purpose — <i>"which model did I use to set up my TP2 cluster the first time?"</i>, the canon answered with verbatim receipts: <b>IQ2_M @ 18888</b>, the brain during the first-ever TP=2 bring-up. Twelve days back. Three engine generations ago (IQ2_M → NVFP4 GLM → EXL3). <b>The canon never expires — only the question needs precision.</b></p></div>
+  <div class="grid cols2" style="margin-top:1.2rem">
+    <div class="card reveal"><h3>Concurrency, proven</h3><p>Concurrent CLI agents operate the same canon through git-serialized close-outs; a blank subagent needed only a file path. Every agent shape on the machine, served.</p></div>
+    <div class="card reveal" data-delay="120"><h3>Offline, proven</h3><p>The whole house — engine, agent, memory — runs airgapped. No API keys, no egress, no per-query billing. It works when the internet doesn't.</p></div>
+  </div>
+  <div class="foot"><span>Receipts: sessions/2026-09-02 · ADR-0011 · ADR-0013</span><span>08 / 11</span></div>
+</section>
+
+<!-- 9 · THE PROMISE -->
+<section class="slide">
+  <div class="kicker alt">The commitment</div>
+  <h2>We use it every day. So it ships.</h2>
+  <p class="verdict">A system used daily is a system <em>improved daily</em> — until it's ready for V1 and full shipment.</p>
+  <p class="sub"><span class="brand">playn<span class="fx">frontierAI</span></span> is not a demo. It runs a real house 24/7 — engines, research, company, studio, this very deck. That daily use is the development engine: every failure fixed, every gate hardened, every receipt banked goes straight into the product.</p>
+  <div class="callout g" style="border-left-color:var(--accent2);background:rgba(245,184,61,.07);max-width:none"><p style="font-size:1.1rem"><b style="color:var(--accent2)">ALPHA — FREE FOR FOLLOWERS.</b> Followers of <b style="color:var(--ink)">local.ai/playn</b> — or anyone arriving through the referral link — get the alpha, free. One gate. A real measure of interest. A founding customer base when V1 ships.</p></div>
+  <a class="cta" href="https://local.ai/playn">local.ai/playn → get the alpha</a>
+  <div class="foot"><span class="brand">playn<span class="fx">frontierAI</span></span><span>09 / 11</span></div>
+</section>
+
+<!-- 10 · THE BOTTOM LINE -->
+<section class="slide">
+  <div class="kicker">The bottom line</div>
+  <h2>The only system you need to be ready — 24/7.</h2>
+  <p class="verdict">One canon. <em>Every agent on the machine.</em> Any model you park on :8888.</p>
+  <div class="chips">
+    <span class="chip g">Local model of choice</span>
+    <span class="chip">Concurrent CLIs</span>
+    <span class="chip g">Subagents — zero wiring</span>
+    <span class="chip">OMP-native</span>
+    <span class="chip">Any context length</span>
+    <span class="chip g">$0 per query</span>
+    <span class="chip">Fully offline</span>
+    <span class="chip">Git-versioned truth</span>
+  </div>
+  <p class="sub">Ready in under a minute. Every time. Forever.</p>
+  <div class="foot"><span class="brand">playn<span class="fx">frontierAI</span></span><span>10 / 11</span></div>
+</section>
+
+<!-- 11 · CLOSER -->
+<section class="slide">
+  <div class="kicker alt">playnfrontierAI · local.ai/playn</div>
+  <div class="glitchline">
+    <span class="g">1M context on two Sparks.</span>
+    <span class="g">Engine swaps in a day.</span>
+    <span class="g">Memory that audits its machine.</span>
+    <span class="g">12-day deep recall.</span>
+    <span class="g">Concurrent CLIs + subagents.</span>
+    <span class="g">$0 per query, forever.</span>
+    <span class="g">Ready 24/7 — offline.</span>
+  </div>
+  <div class="closer-brand">playn<span class="fx">frontierAI</span></div>
+  <div class="verified">Locally verified.</div>
+  <div class="foot"><span>Frontier Media · Ep 7 · receipts channel — trust is the asset</span><span>11 / 11</span></div>
+</section>
+
+<script>
+  // progress bar
+  const prog=document.getElementById('prog');
+  addEventListener('scroll',()=>{const h=document.documentElement;
+    prog.style.width=(h.scrollTop/(h.scrollHeight-innerHeight)*100)+'%'},{passive:true});
+  // keyboard nav
+  const slides=[...document.querySelectorAll('.slide')];
+  addEventListener('keydown',e=>{
+    const cur=slides.findIndex(s=>Math.abs(s.getBoundingClientRect().top)<innerHeight/2);
+    if(['ArrowRight','ArrowDown','PageDown',' '].includes(e.key)&&cur<slides.length-1){e.preventDefault();slides[cur+1].scrollIntoView({behavior:'smooth'})}
+    if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)&&cur>0){e.preventDefault();slides[cur-1].scrollIntoView({behavior:'smooth'})}
+  });
+  // canvas constellation (DeckPolish)
+  (function () {
+    var cv = document.getElementById('bg');
+    if (!cv || cv.dataset.bound) return;
+    cv.dataset.bound = '1';
+    var ctx = cv.getContext('2d');
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var accent = (getComputedStyle(document.documentElement).getPropertyValue('--accent') || '').trim() || '#3ddc84';
+    var N = 90, LINK = 140, P = [], W = 0, H = 0;
+    function resize() {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function seed() {
+      P = [];
+      for (var i = 0; i < N; i++) P.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 16, vy: (Math.random() - 0.5) * 16,
+        r: 0.6 + Math.random() * 1.6, a: 0.10 + Math.random() * 0.15
+      });
+    }
+    function draw(dt) {
+      var i, j, p, q, dx, dy, d2, L2 = LINK * LINK;
+      ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = ctx.fillStyle = accent;
+      ctx.lineWidth = 1;
+      for (i = 0; i < N; i++) {
+        p = P[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.x < -24) p.x = W + 24; else if (p.x > W + 24) p.x = -24;
+        if (p.y < -24) p.y = H + 24; else if (p.y > H + 24) p.y = -24;
+      }
+      for (i = 0; i < N; i++) {
+        p = P[i];
+        for (j = i + 1; j < N; j++) {
+          q = P[j];
+          dx = p.x - q.x; dy = p.y - q.y; d2 = dx * dx + dy * dy;
+          if (d2 < L2) {
+            ctx.globalAlpha = (1 - Math.sqrt(d2) / LINK) * 0.25;
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+          }
+        }
+      }
+      for (i = 0; i < N; i++) {
+        p = P[i];
+        ctx.globalAlpha = p.a;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    resize(); seed();
+    window.addEventListener('resize', function () { resize(); seed(); if (reduce) draw(0); });
+    if (reduce) { draw(0); return; }
+    var last = performance.now();
+    function tick(now) {
+      draw(Math.min((now - last) / 1000, 0.05)); last = now;
+      window.requestAnimationFrame(tick);
+    }
+    window.requestAnimationFrame(tick);
+  })();
+  // reveal on scroll (DeckPolish)
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (!els.length) return;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce || !('IntersectionObserver' in window)) {
+      els.forEach(function (el) { el.classList.add('is-visible'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        io.unobserve(entry.target);
+        var el = entry.target;
+        var delay = parseInt(el.getAttribute('data-delay') || '0', 10);
+        if (delay > 0) {
+          el.style.transitionDelay = delay + 'ms';
+          el.addEventListener('transitionend', function () {
+            el.style.transitionDelay = '';
+          }, { once: true });
+        }
+        el.classList.add('is-visible');
+      });
+    }, { threshold: 0.35 });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+  // animated bars (DeckPolish)
+  (function () {
+    var fills = document.querySelectorAll('.fill');
+    if (!fills.length) return;
+    var slides = document.querySelectorAll('.slide');
+    var targets = slides.length ? slides : fills;
+    if (!('IntersectionObserver' in window)) {
+      fills.forEach(function (f) { f.classList.add('is-on'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        io.unobserve(entry.target);
+        var nodes = entry.target.classList.contains('fill')
+          ? [entry.target]
+          : entry.target.querySelectorAll('.fill');
+        nodes.forEach(function (f) { f.classList.add('is-on'); });
+      });
+    }, { threshold: 0.35 });
+    targets.forEach(function (t) { io.observe(t); });
+  })();
+  // count-up (DeckPolish)
+  (function () {
+    var els = document.querySelectorAll('.count[data-to]');
+    if (!els.length) return;
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function put(el, value, dec, suffix) {
+      el.textContent = value.toFixed(dec) + suffix;
+    }
+    function run(el) {
+      var raw = el.getAttribute('data-to');
+      var to = parseFloat(raw);
+      if (isNaN(to)) return;
+      var dec = raw.indexOf('.') > -1 ? 1 : 0;
+      var suffix = el.getAttribute('data-suffix') || '';
+      if (reduce) { put(el, to, dec, suffix); return; }
+      var t0;
+      function step(now) {
+        if (t0 === undefined) t0 = now;
+        var p = Math.min((now - t0) / 1200, 1);
+        put(el, to * (1 - Math.pow(1 - p, 3)), dec, suffix);
+        if (p < 1) window.requestAnimationFrame(step);
+      }
+      window.requestAnimationFrame(step);
+    }
+    if (!('IntersectionObserver' in window)) { els.forEach(run); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        io.unobserve(entry.target);
+        run(entry.target);
+      });
+    }, { threshold: 0.35 });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+</body>
+</html>
